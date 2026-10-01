@@ -18,14 +18,17 @@ jobs:
           flutter-version: "3.24.x"
           cache: true
 
-      # 💡 动态注入：同时重写 path 和 collection 版本，完美解开 flutter_test 冲突
+      # 💡 动态注入：覆盖 path/collection 冲突，并将 flutter_lints 降级到 Dart 3.5.x 兼容版本
       - name: Inject Dependency Override
         run: |
           python3 -c "
           with open('pubspec.yaml', 'r') as f:
               content = f.read()
+          # 1. 注入 path 与 collection 重写
           override_text = 'dependency_overrides:\n  path: 1.9.0\n  collection: 1.18.0'
           content = content.replace('dependency_overrides:', override_text)
+          # 2. 替换高版本 flutter_lints 为适配当前 SDK 的 4.0.0
+          content = content.replace('flutter_lints: ^6.0.0', 'flutter_lints: ^4.0.0')
           with open('pubspec.yaml', 'w') as f:
               f.write(content)
           "
