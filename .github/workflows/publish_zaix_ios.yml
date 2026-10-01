@@ -1,0 +1,43 @@
+name: Build Unsigned iOS IPA
+
+on:
+  workflow_dispatch: # 关键修改：支持在 GitHub 网页手动点击触发！
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      # 1. 签出代码
+      - uses: actions/checkout@v4
+        with:
+          ref: zaimanhua # ⚠️如果你的主分支是 main 或 master，记得改这里，或者直接删掉 ref 这两行
+
+      # 2. 设置 Flutter 环境
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.x"
+          cache: true
+
+      # 3. 安装依赖
+      - name: Restore Packages
+        run: flutter pub get
+
+      # 4. 编译 iOS (免签名)
+      - name: Build IOS
+        run: flutter build ios --release --no-codesign
+
+      # 5. 打包成未签名 IPA
+      - name: Create IPA
+        run: |
+          mkdir -p build/ios/iphoneos/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/Runner.app
+          cd build/ios/iphoneos/
+          zip -q -r ios_no_sign.ipa Payload
+
+      # 6. 直接上传到 Artifacts 供你下载（绕过复杂的 Release 和 Secrets 密钥要求）
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios_no_sign.ipa
+          path: build/ios/iphoneos/ios_no_sign.ipa
