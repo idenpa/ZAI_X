@@ -18,11 +18,8 @@ jobs:
           flutter-version: "3.24.x"
           cache: true
 
-      # 💡 动态注入：在已有的 dependency_overrides: 节点下方自动追加 path: 1.9.0
       - name: Inject Dependency Override
-        run: |
-          sed -i '' '/dependency_overrides:/a\
-  path: 1.9.0' pubspec.yaml
+        run: python3 -c "content = open('pubspec.yaml').read(); open('pubspec.yaml', 'w').write(content.replace('dependency_overrides:', 'dependency_overrides:\n  path: 1.9.0'))"
 
       - name: Restore Packages
         run: flutter pub get
