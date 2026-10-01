@@ -12,27 +12,30 @@ jobs:
         with:
           ref: zaimanhua
 
-      # 将 Flutter SDK 改为 3.24.x，自动兼容 path 1.9.1 等新依赖
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.24.x"
           cache: true
 
+      # 💡 核心修改：在编译前，动态往 pubspec.yaml 末尾追加依赖重写，强制将 path 解锁/重写为 1.9.0
+      - name: Inject Dependency Override
+        run: |
+          echo "" >> pubspec.yaml
+          echo "dependency_overrides:" >> pubspec.yaml
+          echo "  path: 1.9.0" >> pubspec.yaml
+
       - name: Restore Packages
         run: flutter pub get
 
-      # 自动安装 iOS 原生 Pod 依赖
       - name: Install CocoaPods Dependencies
         run: |
           cd ios
           pod install --repo-update || pod install
 
-      # 编译 iOS (免签名)
       - name: Build IOS
         run: flutter build ios --release --no-codesign
 
-      # 打包成未签名 IPA
       - name: Create IPA
         run: |
           mkdir -p build/ios/iphoneos/Payload
