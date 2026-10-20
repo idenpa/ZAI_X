@@ -66,4 +66,4 @@ jobs:
             build/dist/*/*.dmg
             build/dist/*/*.zip
 
-      - run: echo "🍏 macOS build job completed with status: ${{ job.status }}."
+      - run: echo "macOS build job completed with status: ${{ job.status }}."
