@@ -51,6 +51,7 @@ dependencies:
   battery_plus: ^7.0.0 #电池状态
   file_selector: ^1.0.3 #文件选择
   windows_single_instance: ^1.0.1 #Windows单实例
+  window_manager: ^0.3.9
   
   flutter: 
     sdk: flutter
