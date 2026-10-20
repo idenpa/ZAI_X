@@ -31,8 +31,18 @@ jobs:
           flutter config --enable-macos-desktop
           flutter config --no-enable-swift-package-manager
 
-      - name: Restore Packages
-        run: flutter pub get
+      - name: Restore Packages (Downgrade connectivity_plus)
+        run: |
+          # 1. 将 pubspec.yaml 中的 connectivity_plus 版本约束覆盖为 7.0.0
+          #    使用 sed 确保修改的是 dependencies 下的那一行
+          sed -i '' 's/connectivity_plus: \^[0-9.]*/connectivity_plus: 7.0.0/' pubspec.yaml
+          
+          # 2. 强制重新解析依赖，生成新的 pubspec.lock
+          flutter pub get
+          
+          # 3. 验证一下锁定的版本确实是 7.0.0（方便排查问题）
+          echo "--- Locked connectivity_plus version: ---"
+          grep -A 2 "name: connectivity_plus" pubspec.lock || echo "Not found in lockfile"
 
       # 同步修改 Xcode 工程中的最低部署目标为 10.15
       - name: Sync Xcode Deployment Target
