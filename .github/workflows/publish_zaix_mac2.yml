@@ -1,4 +1,4 @@
-name: Build Unsigned macOS App 2
+name: Build Unsigned macOS App
 
 on:
   workflow_dispatch:
@@ -26,8 +26,17 @@ jobs:
       - name: Enable macOS Desktop
         run: flutter config --enable-macos-desktop
 
-      - name: Restore Packages
-        run: flutter pub get
+      - name: Restore Packages & Fix Conflict
+        run: |
+          python3 -c "
+          with open('pubspec.yaml', 'r', encoding='utf-8') as f:
+              lines = f.readlines()
+          with open('pubspec.yaml', 'w', encoding='utf-8') as f:
+              for line in lines:
+                  if not line.strip().startswith('path:') and not line.strip().startswith('collection:'):
+                      f.write(line)
+          "
+          flutter pub get
 
       - name: Install macOS Pods
         run: |
