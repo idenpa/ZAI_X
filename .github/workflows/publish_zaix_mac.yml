@@ -17,7 +17,6 @@ jobs:
         with:
           ref: zaimanhua
 
-      # 💡 明确指定 3.27.x，避开最新 stable 通道的 Dart AOT 崩溃 Bug
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -30,19 +29,18 @@ jobs:
       - name: Restore Packages
         run: flutter pub get
 
-      # 💡 CocoaPods 自动防护逻辑
       - name: Install CocoaPods Dependencies
         run: |
           if [ -d "macos" ] && [ -f "macos/Podfile" ]; then
             cd macos
             python3 -c "
-            with open('Podfile', 'r') as f:
-                content = f.read()
-            if 'platform :osx' not in content:
-                new_content = \"platform :osx, '11.0'\n\" + content
-                with open('Podfile', 'w') as f:
-                    f.write(new_content)
-            "
+          with open('Podfile', 'r') as f:
+              content = f.read()
+          if 'platform :osx' not in content:
+              new_content = \"platform :osx, '11.0'\n\" + content
+              with open('Podfile', 'w') as f:
+                  f.write(new_content)
+          "
             pod install --repo-update || pod install
             cd ..
           fi
@@ -50,18 +48,15 @@ jobs:
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
 
-      # 📦 编译并打包 macOS 的 dmg 与 zip
       - name: Build MacOS Packages
         run: flutter_distributor package --platform macos --targets dmg,zip --skip-clean
 
-      # 📁 1. 始终上传到 Actions 构件区（方便测试下载）
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos_dist
           path: build/dist/*/*
 
-      # 🚀 2. 推送 Tag 时自动同步到 Release 页面
       - name: Release macOS Packages
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
