@@ -28,9 +28,11 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:windows_single_instance/windows_single_instance.dart';
+import 'package:window_manager/window_manager.dart'; // 1. 引入 window_manager
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   if (Platform.isWindows) {
     await WindowsSingleInstance.ensureSingleInstance(
       [],
@@ -40,6 +42,27 @@ void main() async {
       },
     );
   }
+
+  // 2. 初始化桌面端窗口管理器（支持 Windows, macOS, Linux）
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    await windowManager.ensureInitialized();
+
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(975, 880),    // 设置一个舒适的默认初始大小（完美契合双栏布局）
+      minimumSize: Size(900, 600), // 设置最小尺寸限制，防止挤压崩溃
+      center: true,             // 首次打开居中显示
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+    );
+
+    // 等待窗口准备好后显示，并自动恢复上一次记录的窗口大小和位置
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+
   await Hive.initFlutter();
   //初始化服务
   await initServices();
@@ -91,8 +114,47 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   Set<PointerDeviceKind> get dragDevices => PointerDeviceKind.values.toSet();
 }
 
-class DMZJApp extends StatelessWidget {
+// 3. 让根 App 混入 WindowListener，用来优雅处理 macOS 的关闭按钮逻辑
+class DMZJApp extends StatefulWidget {
   const DMZJApp({super.key});
+
+  @override
+  State<DMZJApp> createState() => _DMZJAppNState();
+}
+
+class _DMZJAppNState extends State<DMZJApp> with WindowListener {
+  @override
+  void initState() {
+    super.initState();
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      windowManager.addListener(this);
+      // macOS 专属优化：拦截红叉关闭事件，改为隐藏窗口到后台
+      if (Platform.isMacOS) {
+        windowManager.setPreventClose(true);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      windowManager.removeListener(this);
+    }
+    super.dispose();
+  }
+
+  // 监听窗口关闭按钮点击
+  @override
+  void onWindowClose() async {
+    if (Platform.isMacOS) {
+      // Mac 上点红叉：隐藏窗口而不是强行杀死进程，符合 Mac 软件习惯
+      await windowManager.hide();
+    } else {
+      // Windows 保持正常销毁退出
+      await windowManager.destroy();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
