@@ -1,0 +1,75 @@
+name: Build Unsigned macOS
+
+on:
+  workflow_dispatch:
+  # 想 tag 触发就打开下面两行
+  # push:
+  #   tags:
+  #     - "*"
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: zaimanhua
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          cache: true
+
+      - name: Enable macOS Desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Restore Packages
+        run: flutter pub get
+
+      # 和 iOS 一样：强行在 macos/Podfile 顶部注入 platform :osx
+      # 一般 Flutter 模板自带 platform :osx, '10.14'，但作者改过 Flutter 版本后
+      # 遇到 CocoaPods 报最低版本问题，用这段兜底
+      - name: Install CocoaPods Dependencies
+        run: |
+          cd macos
+          python3 - <<'PY'
+          import io
+          path = 'Podfile'
+          with io.open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+          if 'platform :osx' not in content:
+              content = "platform :osx, '10.14'\n" + content
+              with io.open(path, 'w', encoding='utf-8') as f:
+                  f.write(content)
+          PY
+          pod install --repo-update || pod install
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      # 用 ditto 打包，保留 .app 内的符号链接和权限
+      - name: Package macOS App
+        run: |
+          cd build/macos/Build/Products/Release
+          APP_PATH=$(ls -d *.app | head -n1)
+          APP_NAME=$(basename "$APP_PATH" .app)
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${APP_NAME}_macos_no_sign.zip"
+          echo "APP_NAME=${APP_NAME}" >> "$GITHUB_ENV"
+
+      # 可选：顺手生成一个 dmg（不需要可以删掉）
+      - name: Create DMG (optional)
+        run: |
+          cd build/macos/Build/Products/Release
+          APP_PATH=$(ls -d *.app | head -n1)
+          APP_NAME=$(basename "$APP_PATH" .app)
+          hdiutil create -volname "$APP_NAME" -srcfolder "$APP_PATH" -ov -format UDZO "${APP_NAME}_macos_no_sign.dmg"
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-unsigned
+          path: |
+            build/macos/Build/Products/Release/*_macos_no_sign.zip
+            build/macos/Build/Products/Release/*_macos_no_sign.dmg
