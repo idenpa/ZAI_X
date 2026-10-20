@@ -1,0 +1,123 @@
+name: Build Unsigned iOS & macOS
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "zaix/*" # 只要推送带有 zaix/ 开头的 tag 就触发
+
+jobs:
+  # ------------------ 1. iOS 编译任务 ------------------
+  build-ios:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: zaimanhua
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          cache: true
+
+      - name: Restore Packages
+        run: flutter pub get
+
+      - name: Install CocoaPods Dependencies
+        run: |
+          cd ios
+          python3 -c "
+          with open('Podfile', 'r') as f:
+              content = f.read()
+          new_content = 'platform :ios, \'13.0\'\n' + content
+          with open('Podfile', 'w') as f:
+              f.write(new_content)
+          "
+          pod install --repo-update || pod install
+
+      - name: Build IOS
+        run: flutter build ios --release --no-codesign
+
+      - name: Create IPA
+        run: |
+          mkdir -p build/ios/iphoneos/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/Runner.app
+          cd build/ios/iphoneos/
+          zip -q -r ios_no_sign.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios_no_sign.ipa
+          path: build/ios/iphoneos/ios_no_sign.ipa
+
+      - name: Release iOS IPA
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.TOKEN }}
+          files: build/ios/iphoneos/ios_no_sign.ipa
+
+  # ------------------ 2. macOS 编译任务 ------------------
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: zaimanhua
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          cache: true
+
+      - name: Enable Flutter Desktop for macOS
+        run: flutter config --enable-macos-desktop
+
+      - name: Restore Packages
+        run: flutter pub get
+
+      - name: Install CocoaPods Dependencies
+        run: |
+          if [ -d "macos" ] && [ -f "macos/Podfile" ]; then
+            cd macos
+            python3 -c "
+            with open('Podfile', 'r') as f:
+                content = f.read()
+            if 'platform :osx' not in content:
+                new_content = \"platform :osx, '11.0'\n\" + content
+                with open('Podfile', 'w') as f:
+                    f.write(new_content)
+            "
+            pod install --repo-update || pod install
+            cd ..
+          fi
+
+      - name: Install flutter_distributor
+        run: dart pub global activate flutter_distributor
+
+      - name: Build MacOS Packages
+        run: flutter_distributor package --platform macos --targets dmg,zip --skip-clean
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos_dist
+          path: build/dist/*/*
+
+      - name: Release macOS Packages
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.TOKEN }}
+          files: |
+            build/dist/*/*.dmg
+            build/dist/*/*.zip
