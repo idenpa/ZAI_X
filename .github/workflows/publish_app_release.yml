@@ -1,4 +1,4 @@
-name: app-build-action
+name: publish_app_release
 #推送Tag时触发
 on:
   push:
