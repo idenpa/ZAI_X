@@ -1,4 +1,4 @@
-name: Build Unsigned macOS App
+name: Build Unsigned macOS App 2
 
 on:
   workflow_dispatch:
