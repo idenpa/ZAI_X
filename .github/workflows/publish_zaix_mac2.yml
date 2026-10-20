@@ -1,4 +1,4 @@
-name: Build Unsigned macOS App2
+name: Build Unsigned macOS App
 
 on:
   workflow_dispatch:
@@ -58,12 +58,12 @@ jobs:
           path: build/dist/*/*
 
       - name: Release macOS Packages
-        if: startsWith(github.ref, 'refs/tags/')
+        if: "startsWith(github.ref, 'refs/tags/')"
         uses: softprops/action-gh-release@v1
         with:
-          token: ${{ secrets.TOKEN }}
+          token: "${{ secrets.TOKEN }}"
           files: |
             build/dist/*/*.dmg
             build/dist/*/*.zip
 
-      - run: echo "macOS build job completed with status: ${{ job.status }}."
+      - run: echo "🍏 macOS build job completed with status: ${{ job.status }}."
