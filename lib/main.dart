@@ -127,12 +127,15 @@ class DMZJApp extends StatefulWidget {
   State<DMZJApp> createState() => _DMZJAppNState();
 }
 
-class _DMZJAppNState extends State<DMZJApp> with WindowListener {
+class _DMZJAppNState extends State<DMZJApp> with WindowListener, WidgetsBindingObserver {
   final box = Hive.box('LocalStorage');
 
   @override
   void initState() {
     super.initState();
+    // 1. 注册生命周期监听（用于兜底唤醒）
+    WidgetsBinding.instance.addObserver(this);
+    
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       windowManager.addListener(this);
     }
@@ -140,17 +143,40 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener {
 
   @override
   void dispose() {
+    // 移除监听
+    WidgetsBinding.instance.removeObserver(this);
+    
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       windowManager.removeListener(this);
     }
     super.dispose();
   }
 
+  // ✅ 新增：生命周期监听（当点击 Dock 图标时，系统会触发 resumed）
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed && Platform.isMacOS) {
+      await _showWindowIfNeeded();
+    }
+  }
+
+  // 通用保存当前窗口大小
   Future<void> _saveCurrentWindowSize() async {
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       final size = await windowManager.getSize();
       await box.put('window_width', size.width);
       await box.put('window_height', size.height);
+    }
+  }
+
+  // ✅ 新增：抽取出来的通用唤醒逻辑，供 focus 和 resumed 共同调用
+  Future<void> _showWindowIfNeeded() async {
+    if (Platform.isMacOS) {
+      if (!await windowManager.isVisible()) {
+        await windowManager.show();
+        await windowManager.focus();
+      }
     }
   }
 
@@ -161,7 +187,7 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener {
     await _saveCurrentWindowSize();
   }
 
-  // ✅ 核心闭环：所有平台关窗时都会先进这里，确保最后拖拽的尺寸绝对能落盘
+  // 核心闭环：所有平台关窗时都会先进这里，确保最后拖拽的尺寸绝对能落盘
   @override
   void onWindowClose() async {
     await _saveCurrentWindowSize(); 
@@ -173,20 +199,16 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener {
     }
   }
 
-  // Mac 点击 Dock 栏图标重新唤醒窗口
+  // Mac 点击 Dock 栏图标重新唤醒窗口（你原来保留的这部分，现在直接调用通用方法）
   @override
   void onWindowFocus() async {
     super.onWindowFocus();
-    if (Platform.isMacOS) {
-      if (!await windowManager.isVisible()) {
-        await windowManager.show();
-        await windowManager.focus();
-      }
-    }
+    await _showWindowIfNeeded();
   }
 
   @override
   Widget build(BuildContext context) {
+    // ... 下面的 GetMaterialApp 等等保持完全不变 ...
     return GetMaterialApp(
       title: 'ZAI-X',
       scrollBehavior: AppScrollBehavior(),
