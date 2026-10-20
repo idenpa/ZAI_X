@@ -23,27 +23,27 @@ jobs:
           flutter-version: "3.27.x"
           cache: true
 
-      - name: Enable Flutter Desktop for macOS
+      - name: Enable macOS Desktop
         run: flutter config --enable-macos-desktop
 
       - name: Restore Packages
         run: flutter pub get
 
-      - name: Install CocoaPods Dependencies
+      - name: Install macOS Pods
         run: |
-          if [ -d "macos" ] && [ -f "macos/Podfile" ]; then
-            cd macos
-            python3 -c "
-          with open('Podfile', 'r') as f:
+          cd macos
+          python3 - << 'PY'
+          import io
+          path = 'Podfile'
+          with io.open(path, 'r', encoding='utf-8') as f:
               content = f.read()
           if 'platform :osx' not in content:
-              new_content = \"platform :osx, '11.0'\n\" + content
-              with open('Podfile', 'w') as f:
-                  f.write(new_content)
-          "
-            pod install --repo-update || pod install
-            cd ..
-          fi
+              content = "platform :osx, '11.0'\n" + content
+              with io.open(path, 'w', encoding='utf-8') as f:
+                  f.write(content)
+          PY
+          pod install --repo-update || pod install
+          cd ..
 
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
