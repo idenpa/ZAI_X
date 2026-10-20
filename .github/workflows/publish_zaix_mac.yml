@@ -2,6 +2,9 @@ name: Build Unsigned macOS App
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "zaix/*"
 
 jobs:
   build-macos:
