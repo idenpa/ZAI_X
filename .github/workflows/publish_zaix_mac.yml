@@ -1,12 +1,4 @@
-name: Build Unsigned macOS App
-
-on:
-  workflow_dispatch:
-  push:
-    tags:
-      - "zaix/mac/*" # 或者是你习惯触发的 tag 规则
-
-jobs:
+# ------------------ macOS 编译任务 ------------------
   build-macos:
     runs-on: macos-latest
     permissions:
@@ -17,10 +9,11 @@ jobs:
         with:
           ref: zaimanhua
 
+      # 💡 明确锁定为 3.27.x，避开 stable 最尖端通道的 AOT 崩溃 Bug，同时满足依赖需求
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: "stable"
+          flutter-version: "3.27.x"
           cache: true
 
       - name: Enable Flutter Desktop for macOS
@@ -29,7 +22,7 @@ jobs:
       - name: Restore Packages
         run: flutter pub get
 
-      # 💡 仿照 iOS 的处理，如果 macOS 的 Podfile 需要指定最低系统版本（例如 macOS 11.0），可以在这里自动注入
+      # 💡 预防 CocoaPods 平台版本问题
       - name: Install CocoaPods Dependencies
         run: |
           if [ -d "macos" ] && [ -f "macos/Podfile" ]; then
@@ -49,18 +42,20 @@ jobs:
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
 
-      # 📦 使用 flutter_distributor 打包 macOS 的 dmg 和 zip 格式
       - name: Build MacOS Packages
         run: flutter_distributor package --platform macos --targets dmg,zip --skip-clean
 
-      # 🚀 上传编译好的 macOS DMG 和 ZIP 到 Release（如果不需要自动发布 Release，也可以换成 actions/upload-artifact@v4）
-      - name: Upload Release Artifacts
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos_dist
+          path: build/dist/*/*
+
+      - name: Release macOS Packages
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          body_path: document/RELEASE.txt
           token: ${{ secrets.TOKEN }}
           files: |
             build/dist/*/*.dmg
             build/dist/*/*.zip
-
-      - run: echo "🍏 macOS build job's status is ${{ job.status }}."
