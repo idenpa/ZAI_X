@@ -1,11 +1,16 @@
-name: Build Unsigned macOS
+name: Build Unsigned macOS App
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "zaix/mac/*" # 或者是你习惯触发的 tag 规则
 
 jobs:
   build-macos:
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -15,52 +20,47 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.41.0"   # 🔒 固定为已知可用的版本
+          channel: "stable"
           cache: true
 
-      # 关闭 SwiftPM，强制使用 CocoaPods
-      - name: Disable SwiftPM
-        run: flutter config --no-enable-swift-package-manager
-
-      - name: Enable macOS Desktop
+      - name: Enable Flutter Desktop for macOS
         run: flutter config --enable-macos-desktop
 
       - name: Restore Packages
         run: flutter pub get
 
-      # 清理旧缓存
-      - name: Clean Build Cache
-        run: flutter clean
-
-      # 按需注入 platform :osx
-      - name: Install macOS Pods
+      # 💡 仿照 iOS 的处理，如果 macOS 的 Podfile 需要指定最低系统版本（例如 macOS 11.0），可以在这里自动注入
+      - name: Install CocoaPods Dependencies
         run: |
-          cd macos
-          python3 - <<'PY'
-          import io
-          path = 'Podfile'
-          with io.open(path, 'r', encoding='utf-8') as f:
-              content = f.read()
-          if 'platform :osx' not in content:
-              content = "platform :osx, '10.14'\n" + content
-              with io.open(path, 'w', encoding='utf-8') as f:
-                  f.write(content)
-          PY
-          pod install --repo-update || pod install
+          if [ -d "macos" ] && [ -f "macos/Podfile" ]; then
+            cd macos
+            python3 -c "
+            with open('Podfile', 'r') as f:
+                content = f.read()
+            if 'platform :osx' not in content:
+                new_content = \"platform :osx, '11.0'\n\" + content
+                with open('Podfile', 'w') as f:
+                    f.write(new_content)
+            "
+            pod install --repo-update || pod install
+            cd ..
+          fi
 
-      # 构建时关闭图标 tree-shaking，作为绕过 AOT 崩溃的尝试
-      - name: Build macOS
-        run: flutter build macos --release --no-tree-shake-icons
+      - name: Install flutter_distributor
+        run: dart pub global activate flutter_distributor
 
-      - name: Package macOS App
-        run: |
-          cd build/macos/Build/Products/Release
-          APP_PATH=$(ls -d *.app | head -n1)
-          APP_NAME=$(basename "$APP_PATH" .app)
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${APP_NAME}_macos_no_sign.zip"
+      # 📦 使用 flutter_distributor 打包 macOS 的 dmg 和 zip 格式
+      - name: Build MacOS Packages
+        run: flutter_distributor package --platform macos --targets dmg,zip --skip-clean
 
-      - name: Upload macOS Artifact
-        uses: actions/upload-artifact@v4
+      # 🚀 上传编译好的 macOS DMG 和 ZIP 到 Release（如果不需要自动发布 Release，也可以换成 actions/upload-artifact@v4）
+      - name: Upload Release Artifacts
+        uses: softprops/action-gh-release@v1
         with:
-          name: macos-unsigned
-          path: build/macos/Build/Products/Release/*_macos_no_sign.zip
+          body_path: document/RELEASE.txt
+          token: ${{ secrets.TOKEN }}
+          files: |
+            build/dist/*/*.dmg
+            build/dist/*/*.zip
+
+      - run: echo "🍏 macOS build job's status is ${{ job.status }}."
