@@ -17,30 +17,31 @@ jobs:
         with:
           ref: zaimanhua
 
-      # 锁定在最稳的 3.24.4，绝不触发 macOS 编译崩溃 Bug
+      # 💡 这次我们用 3.27.x，兼顾新依赖和兼容性
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.4"
+          flutter-version: "3.27.x"
           cache: true
 
       - name: Enable macOS Desktop
         run: flutter config --enable-macos-desktop
 
-      # 💡 强力清洗：剥离高版本依赖限制，让旧版 Flutter 也能顺畅编译
+      # 💡 强力全家桶清洗：把所有要求极高的现代插件版本要求统一“向下兼容”
       - name: Restore Packages & Downgrade Demanding Packages
         run: |
           python3 -c "
           with open('pubspec.yaml', 'r', encoding='utf-8') as f:
               content = f.read()
           
-          # 1. 移除 flutter_lints
+          # 1. 调整 lints
           content = content.replace('flutter_lints: ^6.0.0', 'flutter_lints: ^3.0.0')
-          
-          # 2. 将过高的 extended_image 版本要求调低，兼容旧 SDK
+          # 2. 调整图片组件
           content = content.replace('extended_image: ^10.0.1', 'extended_image: ^8.2.0')
+          # 3. 调整 html 组件，避免要求 Flutter >=3.32.0
+          content = content.replace('flutter_widget_from_html_core: ^0.17.2', 'flutter_widget_from_html_core: ^0.15.0')
           
-          # 3. 过滤掉版本死锁行
+          # 4. 过滤死锁行
           lines = content.splitlines()
           new_lines = []
           for line in lines:
