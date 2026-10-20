@@ -59,6 +59,9 @@ void main() async {
   // 3. 初始化窗口管理器
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
+    
+    // ✅ 建议在这里直接开启拦截，防止异步延迟导致拦截失效
+    await windowManager.setPreventClose(true);
 
     WindowOptions windowOptions = WindowOptions(
       size: Size(savedWidth, savedHeight),
@@ -72,9 +75,6 @@ void main() async {
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
-      
-      // ✅ 全局开启拦截，确保关窗前有时间落盘
-      await windowManager.setPreventClose(true);
     });
   }
 
