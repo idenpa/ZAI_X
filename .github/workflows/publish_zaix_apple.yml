@@ -7,7 +7,7 @@ on:
       - "zaix/*"       # 只有推送类似 zaix/v1.0.0 的 Tag 时，才会触发并自动发 Release
 
 jobs:
-    # ==========================================
+  # ==========================================
   # Job 1: 构建无签名 iOS IPA
   # ==========================================
   build-ios:
@@ -24,11 +24,9 @@ jobs:
           flutter-version: "3.38.10"
           cache: true
 
-      # ✅ 这里加入了和 macOS 一样的降级命令
       - name: Restore Packages (Downgrade connectivity_plus)
         run: |
           sed -i '' 's/connectivity_plus: \^[0-9.]*/connectivity_plus: 7.0.0/' pubspec.yaml
-          # 强制清理可能残留的旧 lock 文件（确保完全降级）
           rm -f pubspec.lock 
           flutter pub get
 
@@ -109,8 +107,8 @@ jobs:
 
       - name: Restore Packages (Downgrade connectivity_plus)
         run: |
-          # 临时降级插件，避免 SDK 26 的要求
           sed -i '' 's/connectivity_plus: \^[0-9.]*/connectivity_plus: 7.0.0/' pubspec.yaml
+          rm -f pubspec.lock
           flutter pub get
 
       - name: Sync Xcode Deployment Target
@@ -123,13 +121,16 @@ jobs:
           python3 - << 'PY'
           import io
           import re
+          
           path = 'Podfile'
           with io.open(path, 'r', encoding='utf-8') as f:
               content = f.read()
+              
           if "platform :osx" not in content:
               content = "platform :osx, '10.15'\n" + content
           else:
               content = re.sub(r"platform :osx,.*", "platform :osx, '10.15'", content)
+              
           if "post_install" not in content:
               content += """
           post_install do |installer|
@@ -140,6 +141,7 @@ jobs:
             end
           end
           """
+          
           with io.open(path, 'w', encoding='utf-8') as f:
               f.write(content)
           PY
@@ -155,16 +157,13 @@ jobs:
           APP_PATH=$(ls -d *.app | head -n1)
           APP_NAME=$(basename "$APP_PATH" .app)
           
-          # 1. 准备 DMG 临时目录和快捷方式
           mkdir -p dmg_temp
           cp -R "$APP_PATH" dmg_temp/
           ln -s /Applications dmg_temp/Applications
           
-          # 2. 生成 DMG (原生支持拖拽安装)
           hdiutil create -volname "$APP_NAME" -srcfolder dmg_temp -ov -format UDZO "${APP_NAME}_macos_installer.dmg"
           rm -rf dmg_temp
           
-          # 3. 生成便携版 ZIP (可选，方便不想挂载 DMG 的用户)
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${APP_NAME}_macos_portable.zip"
 
       - name: Upload macOS Artifact
@@ -194,10 +193,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          # 直接使用官方默认 Token，无需自己配置 Secrets
           token: ${{ secrets.GITHUB_TOKEN }}
-          # 如果你想在这个页面写说明，可以指向你的说明文件
-          # body_path: document/RELEASE.txt 
           files: |
             artifacts/*.ipa
             artifacts/*.dmg
