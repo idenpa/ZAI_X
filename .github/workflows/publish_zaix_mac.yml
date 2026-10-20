@@ -17,7 +17,7 @@ jobs:
         with:
           ref: zaimanhua
 
-      # 💡 锁定在成熟稳定的 3.24.4
+      # 锁定在最稳的 3.24.4，绝不触发 macOS 编译崩溃 Bug
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -27,17 +27,28 @@ jobs:
       - name: Enable macOS Desktop
         run: flutter config --enable-macos-desktop
 
-      # 💡 一键清理死锁依赖（flutter_lints、path、collection）
-      - name: Restore Packages & Fix Conflicts
+      # 💡 强力清洗：剥离高版本依赖限制，让旧版 Flutter 也能顺畅编译
+      - name: Restore Packages & Downgrade Demanding Packages
         run: |
           python3 -c "
           with open('pubspec.yaml', 'r', encoding='utf-8') as f:
-              lines = f.readlines()
+              content = f.read()
+          
+          # 1. 移除 flutter_lints
+          content = content.replace('flutter_lints: ^6.0.0', 'flutter_lints: ^3.0.0')
+          
+          # 2. 将过高的 extended_image 版本要求调低，兼容旧 SDK
+          content = content.replace('extended_image: ^10.0.1', 'extended_image: ^8.2.0')
+          
+          # 3. 过滤掉版本死锁行
+          lines = content.splitlines()
+          new_lines = []
+          for line in lines:
+              if not any(k in line for k in ['path: 1.9.1', 'collection: 1.19.1']):
+                  new_lines.append(line)
+                  
           with open('pubspec.yaml', 'w', encoding='utf-8') as f:
-              for line in lines:
-                  # 过滤掉引起冲突的规范检查和版本死锁行
-                  if not any(k in line for k in ['flutter_lints:', 'path: 1.9.1', 'collection: 1.19.1']):
-                      f.write(line)
+              f.write('\n'.join(new_lines) + '\n')
           "
           flutter pub get
 
