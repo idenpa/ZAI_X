@@ -2,10 +2,13 @@ name: Build Unsigned iOS IPA
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "zaix/*"
 
 jobs:
   build-ios:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -15,38 +18,60 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: "stable"
+          flutter-version: "3.38.10"
           cache: true
 
-      - name: Restore Packages
-        run: flutter pub get
+      - name: Restore Packages (Downgrade connectivity_plus)
+        run: |
+          sed -i '' 's/connectivity_plus: \^[0-9.]*/connectivity_plus: 7.0.0/' pubspec.yaml
+          rm -f pubspec.lock 
+          flutter pub get
 
-      # 💡 强行在 Podfile 顶部注入 platform :ios, '13.0'
-      - name: Install CocoaPods Dependencies
+      - name: Sync Xcode Deployment Target
+        run: |
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*;/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/g' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Install iOS Pods
         run: |
           cd ios
-          python3 -c "
-          with open('Podfile', 'r') as f:
+          python3 - << 'PY'
+          import io
+          import re
+          path = 'Podfile'
+          with io.open(path, 'r', encoding='utf-8') as f:
               content = f.read()
-          # 如果里面已经写了 platform，直接重写；没有就插在最前面
-          new_content = 'platform :ios, \'13.0\'\n' + content
-          with open('Podfile', 'w') as f:
-              f.write(new_content)
-          "
+          if "platform :ios" not in content:
+              content = "platform :ios, '13.0'\n" + content
+          else:
+              content = re.sub(r"platform :ios,.*", "platform :ios, '13.0'", content)
+          if "post_install" not in content:
+              content += """
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+              end
+            end
+          end
+          """
+          with io.open(path, 'w', encoding='utf-8') as f:
+              f.write(content)
+          PY
           pod install --repo-update || pod install
+          cd ..
 
-      - name: Build IOS
+      - name: Build iOS
         run: flutter build ios --release --no-codesign
 
       - name: Create IPA
         run: |
           mkdir -p build/ios/iphoneos/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/Runner.app
-          cd build/ios/iphoneos/
+          cd build/ios/iphoneos
           zip -q -r ios_no_sign.ipa Payload
 
-      - name: Upload IPA Artifact
+      - name: Upload iOS Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios_no_sign.ipa
+          name: ios-artifact
           path: build/ios/iphoneos/ios_no_sign.ipa
