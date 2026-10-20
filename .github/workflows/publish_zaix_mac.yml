@@ -1,25 +1,20 @@
 name: Build Unsigned macOS App
 
 on:
-  workflow_dispatch: # 允许在 Actions 页面手动点击触发
+  workflow_dispatch:
   push:
     tags:
-      - "zaix/*"       # 推送以 zaix/ 开头的 tag 时触发
+      - "zaix/*"
 
 jobs:
   build-macos:
-    # 锁定 macOS runner 版本，避免最新版镜像带来的 Xcode/SDK 兼容性问题
     runs-on: macos-14
-    permissions:
-      contents: write # 允许创建 Release
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           ref: zaimanhua
 
-      # 锁定 3.38.10，既满足依赖的 Dart SDK 要求，又避开了 3.44 的 AOT 编译器 Bug
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -33,41 +28,27 @@ jobs:
 
       - name: Restore Packages (Downgrade connectivity_plus)
         run: |
-          # 1. 将 pubspec.yaml 中的 connectivity_plus 版本约束覆盖为 7.0.0
-          #    使用 sed 确保修改的是 dependencies 下的那一行
           sed -i '' 's/connectivity_plus: \^[0-9.]*/connectivity_plus: 7.0.0/' pubspec.yaml
-          
-          # 2. 强制重新解析依赖，生成新的 pubspec.lock
+          rm -f pubspec.lock
           flutter pub get
-          
-          # 3. 验证一下锁定的版本确实是 7.0.0（方便排查问题）
-          echo "--- Locked connectivity_plus version: ---"
-          grep -A 2 "name: connectivity_plus" pubspec.lock || echo "Not found in lockfile"
 
-      # 同步修改 Xcode 工程中的最低部署目标为 10.15
       - name: Sync Xcode Deployment Target
         run: |
           sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]*;/MACOSX_DEPLOYMENT_TARGET = 10.15;/g' macos/Runner.xcodeproj/project.pbxproj
 
-      # 重写 Podfile 并安装依赖
       - name: Install macOS Pods
         run: |
           cd macos
           python3 - << 'PY'
           import io
           import re
-          
           path = 'Podfile'
           with io.open(path, 'r', encoding='utf-8') as f:
               content = f.read()
-          
-          # 1. 统一替换或插入 platform :osx, '10.15'
           if "platform :osx" not in content:
               content = "platform :osx, '10.15'\n" + content
           else:
               content = re.sub(r"platform :osx,.*", "platform :osx, '10.15'", content)
-          
-          # 2. 追加 post_install 钩子，强制所有 Pod 依赖统一目标为 10.15
           if "post_install" not in content:
               content += """
           post_install do |installer|
@@ -78,45 +59,34 @@ jobs:
             end
           end
           """
-          
           with io.open(path, 'w', encoding='utf-8') as f:
               f.write(content)
           PY
           pod install --repo-update || pod install
           cd ..
 
-      # 构建 macOS App (加上 --no-tree-shake-icons 作为双重保险)
       - name: Build macOS App
         run: flutter build macos --release --no-tree-shake-icons
 
-      # 打包产物 (使用 ditto 打包 zip，hdiutil 打包 dmg，不依赖第三方工具)
-      - name: Package Artifacts
+      - name: Package macOS Artifacts
         run: |
           cd build/macos/Build/Products/Release
           APP_PATH=$(ls -d *.app | head -n1)
           APP_NAME=$(basename "$APP_PATH" .app)
           
-          # 打包 zip
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${APP_NAME}_macos_no_sign.zip"
+          mkdir -p dmg_temp
+          cp -R "$APP_PATH" dmg_temp/
+          ln -s /Applications dmg_temp/Applications
           
-          # 打包 dmg
-          hdiutil create -volname "$APP_NAME" -srcfolder "$APP_PATH" -ov -format UDZO "${APP_NAME}_macos_no_sign.dmg"
+          hdiutil create -volname "$APP_NAME" -srcfolder dmg_temp -ov -format UDZO "${APP_NAME}_macos_installer.dmg"
+          rm -rf dmg_temp
+          
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${APP_NAME}_macos_portable.zip"
 
-      # 上传至 Actions 的 Artifact 供下载
-      - name: Upload macOS Artifacts
+      - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-dist
+          name: macos-artifact
           path: |
-            build/macos/Build/Products/Release/*_macos_no_sign.zip
-            build/macos/Build/Products/Release/*_macos_no_sign.dmg
-
-      # 如果是因为打 Tag 触发的，自动发布到 GitHub Release
-      - name: Release macOS Packages
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.TOKEN }}
-          files: |
-            build/macos/Build/Products/Release/*_macos_no_sign.zip
-            build/macos/Build/Products/Release/*_macos_no_sign.dmg
+            build/macos/Build/Products/Release/*_macos_installer.dmg
+            build/macos/Build/Products/Release/*_macos_portable.zip
