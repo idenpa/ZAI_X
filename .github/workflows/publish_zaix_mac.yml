@@ -2,17 +2,19 @@ name: Build Unsigned macOS App
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - zaimanhua
 
 jobs:
   build-macos:
     runs-on: macos-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          ref: zaimanhua
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -28,19 +30,29 @@ jobs:
 
       - name: Install macOS Pods
         run: |
-          cd macos
-          python3 - << 'PY'
-          import io
-          path = 'Podfile'
-          with io.open(path, 'r', encoding='utf-8') as f:
-              content = f.read()
-          if 'platform :osx' not in content:
-              content = "platform :osx, '11.0'\n" + content
-              with io.open(path, 'w', encoding='utf-8') as f:
-                  f.write(content)
-          PY
-          pod install --repo-update || pod install
-          cd ..
+          if [ -d macos ]; then
+            cd macos
+            if [ -f Podfile ]; then
+              python3 - <<'PY'
+import io, os
+path = 'Podfile'
+with io.open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+if 'platform :osx' not in content:
+    content = "platform :osx, '11.0'\n" + content
+    with io.open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+PY
+              pod install --repo-update || pod install
+            else
+              echo "No macos/Podfile found"
+              exit 1
+            fi
+            cd ..
+          else
+            echo "No macos directory found"
+            exit 1
+          fi
 
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
@@ -58,9 +70,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          token: ${{ secrets.TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: |
             build/dist/*/*.dmg
             build/dist/*/*.zip
-
-      - run: echo "🍏 macOS build job completed with status: ${{ job.status }}."
