@@ -1,4 +1,12 @@
-# ------------------ macOS 编译任务 ------------------
+name: Build Unsigned macOS App
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "zaix/*"
+
+jobs:
   build-macos:
     runs-on: macos-latest
     permissions:
@@ -9,7 +17,7 @@
         with:
           ref: zaimanhua
 
-      # 💡 明确锁定为 3.27.x，避开 stable 最尖端通道的 AOT 崩溃 Bug，同时满足依赖需求
+      # 💡 明确指定 3.27.x，避开最新 stable 通道的 Dart AOT 崩溃 Bug
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -22,7 +30,7 @@
       - name: Restore Packages
         run: flutter pub get
 
-      # 💡 预防 CocoaPods 平台版本问题
+      # 💡 CocoaPods 自动防护逻辑
       - name: Install CocoaPods Dependencies
         run: |
           if [ -d "macos" ] && [ -f "macos/Podfile" ]; then
@@ -42,15 +50,18 @@
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
 
+      # 📦 编译并打包 macOS 的 dmg 与 zip
       - name: Build MacOS Packages
         run: flutter_distributor package --platform macos --targets dmg,zip --skip-clean
 
+      # 📁 1. 始终上传到 Actions 构件区（方便测试下载）
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos_dist
           path: build/dist/*/*
 
+      # 🚀 2. 推送 Tag 时自动同步到 Release 页面
       - name: Release macOS Packages
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
@@ -59,3 +70,5 @@
           files: |
             build/dist/*/*.dmg
             build/dist/*/*.zip
+
+      - run: echo "🍏 macOS build job completed with status: ${{ job.status }}."
