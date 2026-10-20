@@ -7,7 +7,7 @@ on:
       - "zaix/*"       # 只有推送类似 zaix/v1.0.0 的 Tag 时，才会触发并自动发 Release
 
 jobs:
-  # ==========================================
+    # ==========================================
   # Job 1: 构建无签名 iOS IPA
   # ==========================================
   build-ios:
@@ -24,27 +24,53 @@ jobs:
           flutter-version: "3.38.10"
           cache: true
 
-      - name: Restore Packages
-        run: flutter pub get
+      # ✅ 这里加入了和 macOS 一样的降级命令
+      - name: Restore Packages (Downgrade connectivity_plus)
+        run: |
+          sed -i '' 's/connectivity_plus: \^[0-9.]*/connectivity_plus: 7.0.0/' pubspec.yaml
+          # 强制清理可能残留的旧 lock 文件（确保完全降级）
+          rm -f pubspec.lock 
+          flutter pub get
 
-      # ✅ 新增：同步修改 Xcode 工程部署目标
       - name: Sync Xcode Deployment Target
         run: |
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*;/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/g' ios/Runner.xcodeproj/project.pbxproj
 
-      # ✅ 更新：安装 Pods 时注入 platform 和 post_install
       - name: Install iOS Pods
         run: |
           cd ios
           python3 - << 'PY'
-          ... # 替换为上面提供的完整 Python 脚本
+          import io
+          import re
+
+          path = 'Podfile'
+          with io.open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          if "platform :ios" not in content:
+              content = "platform :ios, '13.0'\n" + content
+          else:
+              content = re.sub(r"platform :ios,.*", "platform :ios, '13.0'", content)
+
+          if "post_install" not in content:
+              content += """
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+              end
+            end
+          end
+          """
+
+          with io.open(path, 'w', encoding='utf-8') as f:
+              f.write(content)
           PY
           pod install --repo-update || pod install
           cd ..
 
       - name: Build iOS
         run: flutter build ios --release --no-codesign
-      # ... 后续打包 IPA 和上传的步骤保持不变
 
       - name: Create IPA
         run: |
