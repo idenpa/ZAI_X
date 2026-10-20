@@ -17,7 +17,7 @@ jobs:
         with:
           ref: zaimanhua
 
-      # 💡 锁定在成熟稳定的 3.24.4，完美避开 macOS AOT 崩溃 Bug
+      # 💡 锁定在成熟稳定的 3.24.4
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -27,16 +27,17 @@ jobs:
       - name: Enable macOS Desktop
         run: flutter config --enable-macos-desktop
 
-      # 💡 移除傲娇的 flutter_lints，然后顺畅拉取依赖
-      - name: Restore Packages & Bypass Lints
+      # 💡 一键清理死锁依赖（flutter_lints、path、collection）
+      - name: Restore Packages & Fix Conflicts
         run: |
           python3 -c "
           with open('pubspec.yaml', 'r', encoding='utf-8') as f:
-              content = f.read()
-          # 移除 flutter_lints 依赖限制
-          content = content.replace('flutter_lints: ^6.0.0', '')
+              lines = f.readlines()
           with open('pubspec.yaml', 'w', encoding='utf-8') as f:
-              f.write(content)
+              for line in lines:
+                  # 过滤掉引起冲突的规范检查和版本死锁行
+                  if not any(k in line for k in ['flutter_lints:', 'path: 1.9.1', 'collection: 1.19.1']):
+                      f.write(line)
           "
           flutter pub get
 
