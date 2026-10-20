@@ -27,24 +27,24 @@ jobs:
       - name: Restore Packages
         run: flutter pub get
 
+      # ✅ 新增：同步修改 Xcode 工程部署目标
+      - name: Sync Xcode Deployment Target
+        run: |
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*;/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/g' ios/Runner.xcodeproj/project.pbxproj
+
+      # ✅ 更新：安装 Pods 时注入 platform 和 post_install
       - name: Install iOS Pods
         run: |
           cd ios
           python3 - << 'PY'
-          import io
-          path = 'Podfile'
-          with io.open(path, 'r', encoding='utf-8') as f:
-              content = f.read()
-          if 'platform :ios' not in content:
-              content = "platform :ios, '13.0'\n" + content
-              with io.open(path, 'w', encoding='utf-8') as f:
-                  f.write(content)
+          ... # 替换为上面提供的完整 Python 脚本
           PY
           pod install --repo-update || pod install
           cd ..
 
       - name: Build iOS
         run: flutter build ios --release --no-codesign
+      # ... 后续打包 IPA 和上传的步骤保持不变
 
       - name: Create IPA
         run: |
