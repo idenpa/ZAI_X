@@ -31,19 +31,12 @@ jobs:
 
       - name: Install CocoaPods Dependencies
         run: |
-          if [ -d "macos" ] && [ -f "macos/Podfile" ]; then
-            cd macos
-            python3 -c "
-          with open('Podfile', 'r') as f:
-              content = f.read()
-          if 'platform :osx' not in content:
-              new_content = \"platform :osx, '11.0'\n\" + content
-              with open('Podfile', 'w') as f:
-                  f.write(new_content)
-          "
-            pod install --repo-update || pod install
-            cd ..
+          cd macos
+          if ! grep -q "platform :osx" Podfile; then
+            sed -i '' "1s/^/platform :osx, '11.0'\n/" Podfile
           fi
+          pod install --repo-update || pod install
+          cd ..
 
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
