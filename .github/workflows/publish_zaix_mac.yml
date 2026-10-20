@@ -17,41 +17,19 @@ jobs:
         with:
           ref: zaimanhua
 
-      # 💡 这次我们用 3.27.x，兼顾新依赖和兼容性
+      # 💡 完美对齐作者 2026年6月25日 发布的黄金版本 3.44.4
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.27.x"
+          flutter-version: "3.44.4"
           cache: true
 
       - name: Enable macOS Desktop
         run: flutter config --enable-macos-desktop
 
-      # 💡 强力全家桶清洗：把所有要求极高的现代插件版本要求统一“向下兼容”
-      - name: Restore Packages & Downgrade Demanding Packages
-        run: |
-          python3 -c "
-          with open('pubspec.yaml', 'r', encoding='utf-8') as f:
-              content = f.read()
-          
-          # 1. 调整 lints
-          content = content.replace('flutter_lints: ^6.0.0', 'flutter_lints: ^3.0.0')
-          # 2. 调整图片组件
-          content = content.replace('extended_image: ^10.0.1', 'extended_image: ^8.2.0')
-          # 3. 调整 html 组件，避免要求 Flutter >=3.32.0
-          content = content.replace('flutter_widget_from_html_core: ^0.17.2', 'flutter_widget_from_html_core: ^0.15.0')
-          
-          # 4. 过滤死锁行
-          lines = content.splitlines()
-          new_lines = []
-          for line in lines:
-              if not any(k in line for k in ['path: 1.9.1', 'collection: 1.19.1']):
-                  new_lines.append(line)
-                  
-          with open('pubspec.yaml', 'w', encoding='utf-8') as f:
-              f.write('\n'.join(new_lines) + '\n')
-          "
-          flutter pub get
+      # 💡 原汁原味拉取依赖，不进行任何强行改写
+      - name: Restore Packages
+        run: flutter pub get
 
       - name: Install macOS Pods
         run: |
