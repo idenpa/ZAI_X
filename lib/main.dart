@@ -29,6 +29,7 @@ import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:windows_single_instance/windows_single_instance.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,13 +44,25 @@ void main() async {
     );
   }
 
-  // 初始化桌面端窗口管理器
+  // 1. 初始化 Hive 并复用原版路径和 Box
+  await Hive.initFlutter();
+  var dir = await getApplicationSupportDirectory();
+  var settingsBox = await Hive.openBox(
+    "LocalStorage",
+    path: dir.path,
+  );
+
+  // 2. 读取记忆的宽高
+  double savedWidth = settingsBox.get('window_width', defaultValue: 975.0);
+  double savedHeight = settingsBox.get('window_height', defaultValue: 880.0);
+
+  // 3. 初始化窗口管理器
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
 
-    WindowOptions windowOptions = const WindowOptions(
-      size: Size(975, 880),
-      minimumSize: Size(900, 600),
+    WindowOptions windowOptions = WindowOptions(
+      size: Size(savedWidth, savedHeight),
+      minimumSize: const Size(900, 600),
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
@@ -60,17 +73,15 @@ void main() async {
       await windowManager.show();
       await windowManager.focus();
       
-      // 【关键修复 1】在 macOS 上直接开启阻止默认直接关闭，确保红叉被拦截
-      if (Platform.isMacOS) {
-        await windowManager.setPreventClose(true);
-      }
+      // ✅ 全局开启拦截，确保关窗前有时间落盘
+      await windowManager.setPreventClose(true);
     });
   }
 
-  await Hive.initFlutter();
-  //初始化服务
+  // 初始化其他服务
   await initServices();
-  //设置状态栏为透明
+
+  // 设置状态栏为透明
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemUiOverlayStyle systemUiOverlayStyle = const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -83,17 +94,13 @@ void main() async {
 }
 
 Future initServices() async {
-  //包信息
   Utils.packageInfo = await PackageInfo.fromPlatform();
-  //本地存储
   Log.d("Init LocalStorage Service");
   await Get.put(LocalStorageService()).init();
 
-  //用户信息
   Log.d("Init User Service");
   Get.put(UserService()).init();
 
-  //注册Hive适配器
   Hive.registerAdapter(ComicHistoryAdapter());
   Hive.registerAdapter(NovelHistoryAdapter());
   Hive.registerAdapter(DownloadStatusAdapter());
@@ -102,14 +109,9 @@ Future initServices() async {
   Hive.registerAdapter(LocalFavoriteAdapter());
   await Get.put(DBService()).init();
 
-  //初始化设置服务
   await Get.put(NovelFontService()).init();
-
   Get.put(AppSettingsService());
-
-  //初始化漫画下载服务
   Get.put(ComicDownloadService()).init();
-  //初始化小说下载服务
   Get.put(NovelDownloadService()).init();
 }
 
@@ -125,8 +127,9 @@ class DMZJApp extends StatefulWidget {
   State<DMZJApp> createState() => _DMZJAppNState();
 }
 
-// 【关键修复 2】让 WindowListener 能够精准捕捉尺寸变化和关闭动作
 class _DMZJAppNState extends State<DMZJApp> with WindowListener {
+  final box = Hive.box('LocalStorage');
+
   @override
   void initState() {
     super.initState();
@@ -143,22 +146,42 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener {
     super.dispose();
   }
 
-  // 监听窗口大小改变时自动触发保存（实现大小记忆的关键）
-  @override
-  void onWindowResize() async {
-    // 可以在这里处理尺寸变动逻辑，window_manager 内部会自动记录
-    super.onWindowResize();
+  Future<void> _saveCurrentWindowSize() async {
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      final size = await windowManager.getSize();
+      await box.put('window_width', size.width);
+      await box.put('window_height', size.height);
+    }
   }
 
-  // 拦截关闭按钮点击事件
+  // 失焦时顺手存一次（性能极佳）
+  @override
+  void onWindowBlur() async {
+    super.onWindowBlur();
+    await _saveCurrentWindowSize();
+  }
+
+  // ✅ 核心闭环：所有平台关窗时都会先进这里，确保最后拖拽的尺寸绝对能落盘
   @override
   void onWindowClose() async {
+    await _saveCurrentWindowSize(); 
+    
     if (Platform.isMacOS) {
-      // Mac 上点红叉：隐藏窗口到后台
-      await windowManager.hide();
+      await windowManager.hide(); // Mac 隐藏到后台
     } else {
-      // Windows 保持正常销毁
-      await windowManager.destroy();
+      await windowManager.destroy(); // Windows 彻底退出
+    }
+  }
+
+  // Mac 点击 Dock 栏图标重新唤醒窗口
+  @override
+  void onWindowFocus() async {
+    super.onWindowFocus();
+    if (Platform.isMacOS) {
+      if (!await windowManager.isVisible()) {
+        await windowManager.show();
+        await windowManager.focus();
+      }
     }
   }
 
@@ -184,7 +207,6 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener {
       navigatorObservers: [FlutterSmartDialog.observer],
       builder: FlutterSmartDialog.init(
         loadingBuilder: ((msg) => const AppLoaddingWidget()),
-        //字体大小不跟随系统变化
         builder: (context, child) => Obx(
           () => MediaQuery(
             data: AppSettingsService.instance.useSystemFontSize.value
