@@ -6,7 +6,7 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    # ✅ 唯一保留的底层防御：防止 IPv6 问题导致连不上
+    # ✅ 核心防御：强制 IPv4（解决海外节点连 Gradle 官方源的玄学问题）
     env:
       GRADLE_OPTS: "-Djava.net.preferIPv4Stack=true"
 
@@ -16,7 +16,6 @@ jobs:
         with:
           ref: zaimanhua
 
-      # ✅ 完美复刻 PiliNara：使用 setup-java 的原生缓存
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -39,8 +38,7 @@ jobs:
           rm -f pubspec.lock
           flutter pub get
 
-      # ✅ 删除了所有修改 distributionUrl 和 Maven 镜像的 sed 命令，保持原汁原味
-      
+      # ✅ 没有任何修改镜像的 sed 代码，直接构建
       - name: Build APK (Release)
         run: flutter build apk --release
 
