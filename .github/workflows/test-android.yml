@@ -33,9 +33,14 @@ jobs:
 
       - name: Configure Gradle Mirrors
         run: |
-          # 1. ✅ 核心修复：修改 Gradle Wrapper 下载地址，替换为腾讯云镜像
-          # 这一步专门对付 org.gradle.wrapper.Download.downloadInternal 报错
-          sed -i 's|https\\://services.gradle.org/distributions/|https\\://mirrors.cloud.tencent.com/gradle/|g' android/gradle/wrapper/gradle-wrapper.properties
+          # 1. ✅ 终极修复：使用最暴力的整行替换法，换成华为云镜像
+          # 华为云在海外 GitHub 节点的下载速度极其稳定
+          sed -i 's|^distributionUrl=.*|distributionUrl=https\\://mirrors.huaweicloud.com/gradle/gradle-8.14-all.zip|g' android/gradle/wrapper/gradle-wrapper.properties
+          
+          # 打印出来看看，日志里确认一下是不是真的替换成了华为云！
+          echo "--- 检查 distributionUrl 是否替换成功 ---"
+          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
+          echo "---------------------------------------"
 
           # 2. 修改 build.gradle，加入阿里云仓库（防第三方依赖下载失败）
           sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/build.gradle
