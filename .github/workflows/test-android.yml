@@ -1,4 +1,4 @@
-name: Build Android App
+name: Build Android App (Test)
 
 on:
   workflow_dispatch:
