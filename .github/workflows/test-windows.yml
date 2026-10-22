@@ -34,11 +34,14 @@ jobs:
       # 将 Release 文件夹打包成 ZIP，注意这里去掉了多余的路径层
       - name: Package Windows Artifact
         run: |
-          cd build\windows\x64\runner\Release
-          Compress-Archive -Path * -DestinationPath ../../../ZAI-X_Windows_Portable.zip
+          # 直接指定全路径，不使用 cd，避免算错相对路径
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath build\windows\ZAI-X_Windows_Portable.zip
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
+          name: windows-artifact
+          # 这里对应上面的目标路径 build/windows/
+          path: build/windows/ZAI-X_Windows_Portable.zip
           name: windows-artifact
           path: build/windows/x64/runner/ZAI-X_Windows_Portable.zip
