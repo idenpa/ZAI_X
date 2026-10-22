@@ -60,8 +60,10 @@ void main() async {
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
     
-    // ✅ 全局开启关闭拦截，确保关窗前有时间落盘或执行隐藏
-    await windowManager.setPreventClose(true);
+    // ✅ 仅对 Mac 开启关闭拦截，Windows 端放开拦截，实现系统级秒退！
+    if (Platform.isMacOS) {
+      await windowManager.setPreventClose(true);
+    }
 
     WindowOptions windowOptions = WindowOptions(
       size: Size(savedWidth, savedHeight),
@@ -130,23 +132,29 @@ class DMZJApp extends StatefulWidget {
 class _DMZJAppNState extends State<DMZJApp> with WindowListener, WidgetsBindingObserver {
   final box = Hive.box('LocalStorage');
   
-  // ✅ 核心优化：在内存中缓存的尺寸，避免退出时跨语言请求导致卡顿
+  // 内存缓存尺寸
   Size _currentWindowSize = const Size(975.0, 880.0);
+  
+  // ✅ 防抖定时器，防止拖拽时频繁通信导致掉帧
+  Timer? _resizeTimer;
 
   @override
   void initState() {
     super.initState();
-    // 1. 注册生命周期监听（用于兜底唤醒）
     WidgetsBinding.instance.addObserver(this);
     
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       windowManager.addListener(this);
+      // 初始化时同步一次当前尺寸
+      windowManager.getSize().then((size) {
+        _currentWindowSize = size;
+      });
     }
   }
 
   @override
   void dispose() {
-    // 移除监听
+    _resizeTimer?.cancel(); // 销毁时清理定时器
     WidgetsBinding.instance.removeObserver(this);
     
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
@@ -155,7 +163,6 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener, WidgetsBindingO
     super.dispose();
   }
 
-  // ✅ 监听生命周期（当点击 Dock 图标时，系统会触发 resumed）
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
@@ -164,16 +171,20 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener, WidgetsBindingO
     }
   }
 
-  // ✅ 拖拽时仅更新内存变量，速度极快，无卡顿
+  // ✅ 核心修复：使用 500ms 防抖，停止拖拽后才去获取并保存尺寸
   @override
   void onWindowResize() {
     super.onWindowResize();
-    windowManager.getSize().then((size) {
-      _currentWindowSize = size;
+    _resizeTimer?.cancel();
+    _resizeTimer = Timer(const Duration(milliseconds: 500), () async {
+      if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+        final size = await windowManager.getSize();
+        _currentWindowSize = size;
+        await _saveCurrentWindowSize();
+      }
     });
   }
 
-  // 将内存里的尺寸写入 Hive 磁盘
   Future<void> _saveCurrentWindowSize() async {
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       await box.put('window_width', _currentWindowSize.width);
@@ -181,7 +192,6 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener, WidgetsBindingO
     }
   }
 
-  // 通用唤醒逻辑
   Future<void> _showWindowIfNeeded() async {
     if (Platform.isMacOS) {
       if (!await windowManager.isVisible()) {
@@ -191,28 +201,26 @@ class _DMZJAppNState extends State<DMZJApp> with WindowListener, WidgetsBindingO
     }
   }
 
-  // 失焦时顺手存一次
   @override
   void onWindowBlur() async {
     super.onWindowBlur();
-    await _saveCurrentWindowSize();
+    // 失焦时确保存一次
+    _resizeTimer?.cancel();
+    _resizeTimer = Timer(const Duration(milliseconds: 100), () async {
+      await _saveCurrentWindowSize();
+    });
   }
 
-  // ✅ 核心闭环：分平台处理关闭
   @override
   void onWindowClose() async {
+    // Windows 已经关闭拦截，不会进这里。
+    // Mac 走原生隐藏逻辑。
     if (Platform.isMacOS) {
-      // 🍏 Mac 端：等待存盘完毕后隐藏窗口
       await _saveCurrentWindowSize();
       await windowManager.hide(); 
-    } else {
-      // 🪟 Windows 端：不等待存盘，直接把任务丢给后台，瞬间退出！
-      _saveCurrentWindowSize(); // 👈 注意：这里去掉了 await
-      await windowManager.destroy(); 
     }
   }
 
-  // Mac 点击 Dock 栏图标重新唤醒窗口
   @override
   void onWindowFocus() async {
     super.onWindowFocus();
