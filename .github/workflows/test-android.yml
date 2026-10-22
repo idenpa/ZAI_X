@@ -1,4 +1,4 @@
-name: Build Android App
+name: Build Android App (Test)
 
 on:
   workflow_dispatch:
@@ -6,17 +6,26 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    # ✅ 唯一保留的底层防御：防止 IPv6 问题导致连不上
+    env:
+      GRADLE_OPTS: "-Djava.net.preferIPv4Stack=true"
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           ref: zaimanhua
 
+      # ✅ 完美复刻 PiliNara：使用 setup-java 的原生缓存
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: "zulu"
           java-version: "17"
+          cache: "gradle"
+          cache-dependency-path: |
+            android/*.gradle*
+            android/**/gradle-wrapper.properties
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -30,14 +39,8 @@ jobs:
           rm -f pubspec.lock
           flutter pub get
 
-      # ✅ 唯一且最关键的改动：把超大的 all 包换成精简的 bin 包
-      - name: Switch Gradle to Bin Package
-        run: |
-          sed -i 's|-all.zip|-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
-          echo "--- 确认替换后的地址 ---"
-          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
-
-      # 纯原生构建，让 GitHub 自己走海外网络下载
+      # ✅ 删除了所有修改 distributionUrl 和 Maven 镜像的 sed 命令，保持原汁原味
+      
       - name: Build APK (Release)
         run: flutter build apk --release
 
