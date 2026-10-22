@@ -12,12 +12,18 @@ jobs:
         with:
           ref: zaimanhua
 
-      # ✅ 采纳建议：升级到最新的 v5
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: "zulu"
           java-version: "17"
+
+      # ✅ 核心大招：使用 Gradle 官方缓存 Action，它会自动处理下载和缓存
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.14
+          cache-disabled: false
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -33,20 +39,17 @@ jobs:
 
       - name: Configure Gradle Mirrors
         run: |
-          # 1. ✅ 终极修复：使用最暴力的整行替换法，换成华为云镜像
-          # 华为云在海外 GitHub 节点的下载速度极其稳定
-          sed -i 's|^distributionUrl=.*|distributionUrl=https\\://mirrors.huaweicloud.com/gradle/gradle-8.14-all.zip|g' android/gradle/wrapper/gradle-wrapper.properties
+          # 1. ✅ 终极修复：使用腾讯云镜像，且下载体积更小的 bin.zip
+          sed -i 's|^distributionUrl=.*|distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.14-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
           
-          # 打印出来看看，日志里确认一下是不是真的替换成了华为云！
-          echo "--- 检查 distributionUrl 是否替换成功 ---"
+          # 打印出来确认
+          echo "--- 检查 distributionUrl ---"
           grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
-          echo "---------------------------------------"
-
+          
           # 2. 修改 build.gradle，加入阿里云仓库（防第三方依赖下载失败）
           sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/build.gradle
           sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/build.gradle
           
-          # 3. 修改 settings.gradle (针对新版 Flutter)
           if [ -f android/settings.gradle ]; then
             sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/settings.gradle
             sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/settings.gradle
@@ -57,7 +60,6 @@ jobs:
             sed -i 's|mavenCentral()|maven { url = uri("https://maven.aliyun.com/repository/public") }\n        mavenCentral()|g' android/settings.gradle.kts
           fi
 
-      # ✅ 核心修复：去掉 --no-daemon，回归纯净构建命令
       - name: Build APK (Release)
         run: flutter build apk --release
 
