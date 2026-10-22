@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022  # 👈 从 windows-latest 改为固定使用 windows-2022
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
