@@ -1,4 +1,4 @@
-name: Build Unsigned iOS IPA
+name: Build iOS App (Test)
 
 on:
   workflow_dispatch:
