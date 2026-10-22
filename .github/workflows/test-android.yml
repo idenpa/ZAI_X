@@ -1,4 +1,4 @@
-name: Build Android App (Test)
+name: Build Android App (Debug)
 
 on:
   workflow_dispatch:
@@ -30,11 +30,13 @@ jobs:
           rm -f pubspec.lock
           flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
+      # ✅ 核心修改：构建 Debug 版本，使用 Android 通用测试签名
+      - name: Build APK (Debug)
+        run: flutter build apk --debug
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-artifact
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: android-debug-artifact
+          # Debug 包的路径是 app-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
