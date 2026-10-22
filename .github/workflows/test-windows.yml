@@ -1,0 +1,44 @@
+name: Build Windows App (Test)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: zaimanhua
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.10"
+          cache: true
+
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      # Windows 的降级语法是 PowerShell 语法
+      - name: Restore Packages (Downgrade connectivity_plus)
+        run: |
+          (Get-Content pubspec.yaml) -replace 'connectivity_plus: \^[0-9.]*', 'connectivity_plus: 7.0.0' | Set-Content pubspec.yaml
+          Remove-Item pubspec.lock -ErrorAction SilentlyContinue
+          flutter pub get
+
+      - name: Build Windows App
+        run: flutter build windows --release
+
+      # 将 Release 文件夹打包成 ZIP，注意这里去掉了多余的路径层
+      - name: Package Windows Artifact
+        run: |
+          cd build\windows\x64\runner\Release
+          Compress-Archive -Path * -DestinationPath ../../../ZAI-X_Windows_Portable.zip
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifact
+          path: build/windows/x64/runner/ZAI-X_Windows_Portable.zip
