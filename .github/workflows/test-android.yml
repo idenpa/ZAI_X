@@ -6,17 +6,26 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    # ✅ 终极防断网：注入 JVM 环境变量，强制使用 IPv4
+    env:
+      GRADLE_OPTS: "-Djava.net.preferIPv4Stack=true"
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           ref: zaimanhua
 
+      # ✅ 完美复刻：使用 setup-java 原生缓存，不再使用 setup-gradle 组件
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: "zulu"
           java-version: "17"
+          cache: "gradle"
+          cache-dependency-path: |
+            android/*.gradle*
+            android/**/gradle-wrapper.properties
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -30,20 +39,9 @@ jobs:
           rm -f pubspec.lock
           flutter pub get
 
-      - name: Configure Gradle Environment
+      # ✅ 仅保留阿里云依赖镜像（不改 Gradle 版本），加速国内下载
+      - name: Configure Maven Mirrors
         run: |
-          # 1. ✅ 绝杀 1：在全局 ~/.gradle 中强制 JVM 走 IPv4（比写在 android/gradle.properties 优先级高，绝对生效）
-          mkdir -p ~/.gradle
-          echo "systemProp.java.net.preferIPv4Stack=true" >> ~/.gradle/gradle.properties
-          
-          # 2. ✅ 绝杀 2：暴力重写 Wrapper 地址，直接指向 Gradle 官方最纯净的全球 CDN (downloads 而不是 services)
-          sed -i 's|^distributionUrl=.*|distributionUrl=https\\://downloads.gradle.org/distributions/gradle-8.14-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
-          
-          # 打印出来确认一下，防止 sed 没生效
-          echo "--- 检查 distributionUrl ---"
-          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
-
-          # 3. 配置阿里云镜像加速依赖下载
           sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/build.gradle
           sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/build.gradle
           
