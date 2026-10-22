@@ -12,9 +12,9 @@ jobs:
         with:
           ref: zaimanhua
 
-      # ✅ 升级到 v4，使用最新的 Java 17
+      # ✅ 采纳建议：升级到最新的 v5
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "zulu"
           java-version: "17"
@@ -31,14 +31,12 @@ jobs:
           rm -f pubspec.lock
           flutter pub get
 
-      # ✅ 核心修改：强制 Gradle 走阿里云镜像，防止连接被拒
       - name: Configure Gradle Mirrors
         run: |
           # 修改 build.gradle，加入阿里云仓库
           sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/build.gradle
           sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/build.gradle
           
-          # 修改 settings.gradle (针对新版本 Flutter 项目)
           if [ -f android/settings.gradle ]; then
             sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/settings.gradle
             sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/settings.gradle
@@ -49,9 +47,9 @@ jobs:
             sed -i 's|mavenCentral()|maven { url = uri("https://maven.aliyun.com/repository/public") }\n        mavenCentral()|g' android/settings.gradle.kts
           fi
 
+      # ✅ 核心修复：去掉 --no-daemon，回归纯净构建命令
       - name: Build APK (Release)
-        # 加上 --no-daemon 防止 Gradle 守护进程导致文件锁或网络超时
-        run: flutter build apk --release --no-daemon
+        run: flutter build apk --release
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
