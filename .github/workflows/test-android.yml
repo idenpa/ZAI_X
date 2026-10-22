@@ -18,12 +18,9 @@ jobs:
           distribution: "zulu"
           java-version: "17"
 
-      # ✅ 核心大招：使用 Gradle 官方缓存 Action，它会自动处理下载和缓存
+      # ✅ 采纳官方建议：使用最新版的 setup-gradle，提供极致的缓存加速
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: 8.14
-          cache-disabled: false
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -37,16 +34,15 @@ jobs:
           rm -f pubspec.lock
           flutter pub get
 
-      - name: Configure Gradle Mirrors
+      - name: Configure Gradle Mirrors & IPv4
         run: |
-          # 1. ✅ 终极修复：使用腾讯云镜像，且下载体积更小的 bin.zip
-          sed -i 's|^distributionUrl=.*|distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.14-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
+          # 1. ✅ 核心必杀：强制 JVM 使用 IPv4（防止 GitHub 容器内 IPv6 导致连接被拒）
+          echo "systemProp.java.net.preferIPv4Stack=true" >> android/gradle.properties
           
-          # 打印出来确认
-          echo "--- 检查 distributionUrl ---"
-          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
+          # 2. ✅ 核心必杀：使用官方最稳的 CDN，下载体积更小的 bin 包
+          sed -i 's|^distributionUrl=.*|distributionUrl=https\\://downloads.gradle.org/distributions/gradle-8.14-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
           
-          # 2. 修改 build.gradle，加入阿里云仓库（防第三方依赖下载失败）
+          # 3. 修改依赖仓库为阿里云镜像，加速第三方依赖下载
           sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/build.gradle
           sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/build.gradle
           
