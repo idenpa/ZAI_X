@@ -33,10 +33,15 @@ jobs:
 
       - name: Configure Gradle Mirrors
         run: |
-          # 修改 build.gradle，加入阿里云仓库
+          # 1. ✅ 核心修复：修改 Gradle Wrapper 下载地址，替换为腾讯云镜像
+          # 这一步专门对付 org.gradle.wrapper.Download.downloadInternal 报错
+          sed -i 's|https\\://services.gradle.org/distributions/|https\\://mirrors.cloud.tencent.com/gradle/|g' android/gradle/wrapper/gradle-wrapper.properties
+
+          # 2. 修改 build.gradle，加入阿里云仓库（防第三方依赖下载失败）
           sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/build.gradle
           sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/build.gradle
           
+          # 3. 修改 settings.gradle (针对新版 Flutter)
           if [ -f android/settings.gradle ]; then
             sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/settings.gradle
             sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/settings.gradle
