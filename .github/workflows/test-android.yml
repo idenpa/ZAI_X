@@ -18,9 +18,11 @@ jobs:
           distribution: "zulu"
           java-version: "17"
 
-      # ✅ 采纳官方建议：使用最新版的 setup-gradle，提供极致的缓存加速
+      # ✅ 采纳官方建议：使用最新版 Action，并明确指定使用 MIT 开源协议的 basic 缓存
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic # 避开专有商业组件，纯净开源
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -36,13 +38,13 @@ jobs:
 
       - name: Configure Gradle Mirrors & IPv4
         run: |
-          # 1. ✅ 核心必杀：强制 JVM 使用 IPv4（防止 GitHub 容器内 IPv6 导致连接被拒）
+          # 1. ✅ 强制 JVM 使用 IPv4
           echo "systemProp.java.net.preferIPv4Stack=true" >> android/gradle.properties
           
-          # 2. ✅ 核心必杀：使用官方最稳的 CDN，下载体积更小的 bin 包
+          # 2. ✅ 使用官方 CDN 及体积更小的 bin 包
           sed -i 's|^distributionUrl=.*|distributionUrl=https\\://downloads.gradle.org/distributions/gradle-8.14-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
           
-          # 3. 修改依赖仓库为阿里云镜像，加速第三方依赖下载
+          # 3. 修改依赖仓库为阿里云镜像
           sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/build.gradle
           sed -i 's|mavenCentral()|maven { url "https://maven.aliyun.com/repository/public" }\n        mavenCentral()|g' android/build.gradle
           
