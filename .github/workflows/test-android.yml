@@ -6,7 +6,6 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    # ✅ 终极防断网：注入 JVM 环境变量，强制使用 IPv4
     env:
       GRADLE_OPTS: "-Djava.net.preferIPv4Stack=true"
 
@@ -16,7 +15,6 @@ jobs:
         with:
           ref: zaimanhua
 
-      # ✅ 完美复刻：使用 setup-java 原生缓存，不再使用 setup-gradle 组件
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -33,13 +31,26 @@ jobs:
           flutter-version: "3.38.10"
           cache: true
 
+      # ✅ 核心大招：直接用 wget 下载 Gradle 包，跳过 ./gradlew 的联网检测！
+      - name: Download Gradle Locally
+        run: |
+          # 使用 GitHub 自己的 proxy 下载，极速且稳定
+          wget -q https://mirror.ghproxy.com/https://services.gradle.org/distributions/gradle-8.14-bin.zip -O /tmp/gradle-8.14-bin.zip
+          
+          # 将下载好的 zip 包放到 gradle 默认的缓存目录（./gradlew 会优先从这里找）
+          mkdir -p ~/.gradle/wrapper/dists/gradle-8.14-bin/$(md5sum /tmp/gradle-8.14-bin.zip | cut -c 1-32)
+          cp /tmp/gradle-8.14-bin.zip ~/.gradle/wrapper/dists/gradle-8.14-bin/$(md5sum /tmp/gradle-8.14-bin.zip | cut -c 1-32)/gradle-8.14-bin.zip
+
+          # 同时把项目里的 distributionUrl 改成本地路径，彻底断绝对网络的依赖
+          sed -i 's|^distributionUrl=.*|distributionUrl=file\\:///tmp/gradle-8.14-bin.zip|g' android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Restore Packages (Downgrade connectivity_plus)
         run: |
           sed -i 's/connectivity_plus: \^[0-9.]*/connectivity_plus: 7.0.0/' pubspec.yaml
           rm -f pubspec.lock
           flutter pub get
 
-      # ✅ 仅保留阿里云依赖镜像（不改 Gradle 版本），加速国内下载
+      # 保底操作：还是把 Maven 依赖换成阿里云，避免下载第三方库时报错
       - name: Configure Maven Mirrors
         run: |
           sed -i 's|google()|maven { url "https://maven.aliyun.com/repository/google" }\n        google()|g' android/build.gradle
