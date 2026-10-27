@@ -1,8 +1,12 @@
-本家app的摇一摇广告太烦人了，这个改版原作者太久没更新，所以就自己fork大修了下。
-</br>
-自己在用，基本功能应该正常，因为改了flutter版本可能会有兼容问题就不往原来的代码仓合并了。
-</br>
-现在只有android和windows版本，ios和mac因为没有设备需要自己拉源码编译。下面是原来的readme：
+本版本为开源漫画客户端《再漫画X》的衍生优化版。源码基于Fusn126/[链接](https://github.com/Fusn126/ZAI_X)] 的二次开发分支，并溯源致敬 [xiaoyaocz/[链接](https://github.com/xiaoyaocz/flutter_dmzj)] 的早期开源工作。
+提供iOS,Android,Winows,macOS版本和对应版本的workflow配置。<br />
+主要改动：<br />
+源码修复：清理了上游代码中遗留的本地环境配置（如本地代理、缺失的 Kotlin 插件），确保云端环境能纯净构建。<br />
+CI/CD 搭建：补齐了原作者未提供的 iOS、macOS 和 Windows 自动化云端构建流程。<br />
+桌面端 (macOS & Windows) 专属优化：窗口大小记忆；初始尺寸优化；交互适配。
+
+
+下面是原来的readme：
 
 ---
 
