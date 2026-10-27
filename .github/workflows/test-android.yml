@@ -16,6 +16,18 @@ jobs:
         with:
           ref: zaimanhua
 
+      # ✅ 新增：将 Base64 还原为 jks 文件
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/my-release-key.jks
+          
+      # ✅ 新增：生成原作者约定的 zai_key.properties
+      - name: Create Key Properties
+        run: |
+          echo "storeFile=my-release-key.jks" > android/zai_key.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/zai_key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/zai_key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/zai_key.properties
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
