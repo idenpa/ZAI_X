@@ -81,7 +81,7 @@ jobs:
           hdiutil create -volname "$APP_NAME" -srcfolder dmg_temp -ov -format UDZO "${APP_NAME}_macos_installer.dmg"
           rm -rf dmg_temp
           
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${APP_NAME}_macos_portable.zip"
+         # ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${APP_NAME}_macos_portable.zip"
 
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
@@ -89,4 +89,4 @@ jobs:
           name: macos-artifact
           path: |
             build/macos/Build/Products/Release/*_macos_installer.dmg
-            build/macos/Build/Products/Release/*_macos_portable.zip
+           # build/macos/Build/Products/Release/*_macos_portable.zip
