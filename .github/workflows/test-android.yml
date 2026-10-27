@@ -40,10 +40,23 @@ jobs:
 
       # ✅ 没有任何修改镜像的 sed 代码，直接构建
       - name: Build APK (Release)
-        run: flutter build apk --release
+        # ✅ 核心修改：加上 --split-per-abi
+        run: flutter build apk --release --split-per-abi
+
+      # ✅ 新增：给生成的包重命名，显得更专业
+      - name: Rename APK files
+        run: |
+          cd build/app/outputs/flutter-apk
+          for file in app-*-release.apk; do
+            # 提取架构名称，比如 arm64-v8a
+            abi=$(echo "$file" | sed -E 's|app-(.*)-release\.apk|\1|')
+            # 重命名文件
+            mv "$file" "ZAI-X_android_${abi}.apk"
+          done
 
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-artifact
-          path: build/app/outputs/flutter-apk/app-release.apk
+          # ✅ 因为重命名过了，这里直接匹配当前目录下所有 apk
+          path: build/app/outputs/flutter-apk/*.apk
