@@ -63,15 +63,18 @@ jobs:
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
-      - name: Create IPA
+      - name: Create and Rename IPA
         run: |
           mkdir -p build/ios/iphoneos/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/Runner.app
           cd build/ios/iphoneos
           zip -q -r ios_no_sign.ipa Payload
+          # ✅ 重命名 IPA 为专业名字
+          mv ios_no_sign.ipa ZAI-X_iOS_Unsigned.ipa
 
       - name: Upload iOS Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-artifact
-          path: build/ios/iphoneos/ios_no_sign.ipa
+          # ✅ 匹配重命名后的文件
+          path: build/ios/iphoneos/ZAI-X_iOS_Unsigned.ipa
